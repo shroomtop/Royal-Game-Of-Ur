@@ -1,0 +1,713 @@
+<!--LEGAL-DNA:{"jurisdiction":"US/MN/Baxter","export_tag":"EAR99","spdx":"MIT","artifact_time":1764024493746,"def_pub":"OIN","consent_req":true,"city":"Baxter"}-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Royal Game of Ur</title>
+    <meta name="description" content="The ancient game of strategy. Player vs CPU or Local PvP.">
+    <meta name="theme-color" content="#2a1b0e">
+    <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiUm95YWwgR2FtZSBvZiBVciIs" id="manifest-placeholder">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* --- ARTIFACT DESIGN SYSTEM --- */
+        :root {
+            --wood-base: #3e2723;
+            --wood-light: #5d4037;
+            --lapis: #1a237e;
+            --shell: #fff8e1;
+            --gold: #ffb300;
+            --shadow-soft: rgba(0,0,0,0.3);
+            --shadow-deep: rgba(0,0,0,0.6);
+        }
+
+        body {
+            background-color: #0f0a06;
+            color: #ede0d4;
+            font-family: 'Courier New', Courier, monospace; /* Archival feel */
+            overflow: hidden;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* --- TEXTURES (CSS GENERATED) --- */
+        .bg-wood {
+            background-color: var(--wood-base);
+            background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0px, transparent 1px, transparent 6px);
+            box-shadow: inset 0 0 50px #000;
+        }
+
+        .tile-lapis {
+            background-color: var(--lapis);
+            background-image: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, transparent 50%);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+            border: 1px solid #5c6bc0;
+        }
+
+        .tile-shell {
+            background-color: var(--shell);
+            background-image: linear-gradient(135deg, rgba(0,0,0,0.05) 25%, transparent 25%, transparent 50%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.05) 75%, transparent 75%, transparent);
+            background-size: 4px 4px;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+            border: 1px solid #d7ccc8;
+        }
+
+        /* --- PATTERNS (PURE CSS GEOMETRY) --- */
+        /* Rosette: The Flower */
+        .pattern-rosette {
+            position: absolute; inset: 10%;
+            background: 
+                radial-gradient(circle at 50% 50%, var(--gold) 20%, transparent 21%),
+                conic-gradient(from 0deg, var(--wood-base) 0deg 45deg, transparent 45deg 90deg, var(--wood-base) 90deg 135deg, transparent 135deg 180deg, var(--wood-base) 180deg 225deg, transparent 225deg 270deg, var(--wood-base) 270deg 315deg, transparent 315deg 360deg);
+            border-radius: 50%;
+            border: 2px solid var(--gold);
+            opacity: 0.9;
+        }
+
+        /* Eyes: The 5 Dots */
+        .pattern-eyes {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 20%; padding: 20%;
+            width: 100%; height: 100%;
+        }
+        .eye-dot { background: var(--lapis); border-radius: 50%; border: 2px solid white; }
+
+        /* Dots: The 4x4 Grid */
+        .pattern-dots {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10%; padding: 20%;
+            width: 100%; height: 100%;
+        }
+        .dot-sq { background: var(--lapis); border-radius: 2px; }
+
+        /* --- GAME PIECES --- */
+        .token {
+            width: 80%; height: 80%; border-radius: 50%;
+            position: absolute; top: 10%; left: 10%;
+            z-index: 20;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.3s, left 0.3s, opacity 0.3s;
+        }
+        /* P1: Gold/Sun */
+        .token-p1 { background: radial-gradient(circle at 30% 30%, #ffd54f, #ff6f00); border: 2px solid #fff; }
+        /* P2: Moon/Silver */
+        .token-p2 { background: radial-gradient(circle at 30% 30%, #e0e0e0, #424242); border: 2px solid #9e9e9e; }
+        
+        .valid-move {
+            cursor: pointer;
+            animation: pulse-ring 1.5s infinite;
+            z-index: 30;
+        }
+        .valid-move:hover { transform: scale(1.1); }
+
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0px rgba(34, 197, 94, 0.7); }
+            100% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+        }
+
+        /* --- LAYOUT UTILS --- */
+        .panel { 
+            transition: opacity 0.3s, filter 0.3s; 
+            backdrop-filter: blur(5px);
+        }
+        .panel-inactive { opacity: 0.4; filter: grayscale(0.8); pointer-events: none; }
+        .panel-active { opacity: 1; filter: grayscale(0); }
+
+        /* --- DICE ANIMATION --- */
+        @keyframes roll3d {
+            0% { transform: rotateX(0) rotateY(0); }
+            100% { transform: rotateX(720deg) rotateY(360deg); }
+        }
+        .rolling { animation: roll3d 0.5s ease-out; }
+
+        /* --- RESPONSIVE --- */
+        @media (orientation: portrait) {
+            #rotate-msg { display: flex !important; }
+            #game-ui { display: none !important; }
+        }
+        .board-grid {
+            display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(3, 1fr);
+            gap: 0.5vmin;
+            aspect-ratio: 8/3; width: 95%; max-width: 1000px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden bg-black">
+
+    <div id="rotate-msg" class="hidden fixed inset-0 z-50 bg-black flex-col items-center justify-center text-amber-500">
+        <div class="text-6xl mb-4">↻</div>
+        <h1 class="text-2xl font-bold tracking-widest">ROTATE DEVICE</h1>
+    </div>
+
+    <div id="screen-start" class="fixed inset-0 z-40 bg-black/90 flex flex-col items-center justify-center transition-opacity duration-500">
+        <h1 class="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-amber-400 to-amber-700 mb-2 tracking-widest drop-shadow-lg">UR</h1>
+        <p class="text-stone-400 tracking-[0.5em] text-sm mb-12 uppercase">The Royal Game</p>
+        
+        <div class="flex flex-col gap-4 w-64">
+            <button onclick="App.start(1)" class="py-4 px-6 bg-stone-800 border border-stone-600 hover:bg-stone-700 text-stone-200 font-bold rounded transition-all">
+                SOLO (vs CPU)
+            </button>
+            <button onclick="App.start(2)" class="py-4 px-6 bg-amber-900 border border-amber-700 hover:bg-amber-800 text-amber-100 font-bold rounded transition-all">
+                VERSUS (2P)
+            </button>
+        </div>
+        <div class="mt-8 text-xs text-stone-600">Finkel Rules • Artifact Edition</div>
+    </div>
+
+    <div id="game-ui" class="flex w-full h-full relative bg-wood">
+        
+        <aside id="p1-panel" class="w-[25%] h-full border-r-4 border-black/30 flex flex-col p-4 bg-black/20 relative z-10">
+            <div class="flex justify-between items-end border-b border-white/10 pb-2 mb-4">
+                <div>
+                    <div class="text-[10px] text-amber-500 uppercase tracking-widest">Player 1</div>
+                    <div class="text-2xl font-bold text-amber-100">LIGHT</div>
+                </div>
+                <div id="p1-score" class="text-4xl font-black text-amber-500">0</div>
+            </div>
+            
+            <div class="flex-grow">
+                <div class="text-xs text-stone-500 mb-2 text-center uppercase tracking-widest">Reserve</div>
+                <div id="p1-reserve" class="flex flex-wrap justify-center gap-2 min-h-[40px]"></div>
+            </div>
+
+            <div class="mt-auto">
+                <div id="p1-dice-vis" class="h-16 mb-2 flex justify-center items-center gap-2"></div>
+                <button id="p1-btn" class="w-full py-6 bg-gradient-to-b from-amber-600 to-amber-800 text-white font-bold text-xl rounded shadow-lg active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-amber-900">
+                    ROLL
+                </button>
+            </div>
+        </aside>
+
+        <main class="w-[50%] h-full relative flex flex-col items-center justify-center p-2">
+            
+            <div id="roll-hud" class="absolute top-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur px-8 py-2 rounded-full border border-amber-500/30 shadow-2xl opacity-0 transition-opacity duration-300 z-30 flex flex-col items-center">
+                <span class="text-xs text-amber-500 uppercase tracking-widest mb-1">Roll</span>
+                <span id="roll-val" class="text-5xl font-black text-white leading-none">0</span>
+            </div>
+
+            <div id="board" class="board-grid bg-[#1c1008] border-[6px] border-[#2a1b0e] shadow-2xl relative">
+                </div>
+
+            <div id="toast" class="absolute bottom-8 left-1/2 -translate-x-1/2 text-amber-100 font-bold text-lg bg-black/60 px-4 py-1 rounded opacity-0 transition-opacity pointer-events-none"></div>
+            
+            <button onclick="if(confirm('Quit game?')) location.reload()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/30 text-stone-500 hover:text-red-500 font-bold text-xs">X</button>
+        </main>
+
+        <aside id="p2-panel" class="w-[25%] h-full border-l-4 border-black/30 flex flex-col p-4 bg-black/20 relative z-10 panel-inactive">
+            <div class="flex justify-between items-end border-b border-white/10 pb-2 mb-4 flex-row-reverse">
+                <div class="text-right">
+                    <div class="text-[10px] text-stone-500 uppercase tracking-widest">Player 2</div>
+                    <div id="p2-name" class="text-2xl font-bold text-stone-300">DARK</div>
+                </div>
+                <div id="p2-score" class="text-4xl font-black text-stone-500">0</div>
+            </div>
+            
+            <div class="flex-grow">
+                <div class="text-xs text-stone-500 mb-2 text-center uppercase tracking-widest">Reserve</div>
+                <div id="p2-reserve" class="flex flex-wrap justify-center gap-2 min-h-[40px]"></div>
+            </div>
+
+            <div class="mt-auto">
+                <div id="p2-dice-vis" class="h-16 mb-2 flex justify-center items-center gap-2"></div>
+                <button id="p2-btn" class="w-full py-6 bg-gradient-to-b from-stone-600 to-stone-800 text-stone-300 font-bold text-xl rounded shadow-lg transition-all disabled:opacity-50 border border-stone-900" disabled>
+                    WAIT
+                </button>
+            </div>
+        </aside>
+
+    </div>
+
+<script>
+/** * ROYAL GAME OF UR - ARTIFACT ENGINE 
+ * Version: 1.0.0
+ * Architecture: MVC (Model-View-Controller) in a single module
+ */
+
+// --- 1. CONSTANTS & CONFIG ---
+
+const GRID_LAYOUT = [
+    // Row 0 (P1 Home)
+    {r:0,c:0,t:'rosette'},{r:0,c:1,t:'eyes'},{r:0,c:2,t:'dots'},{r:0,c:3,t:'lapis'},null,null,{r:0,c:6,t:'rosette'},{r:0,c:7,t:'eyes'},
+    // Row 1 (Combat)
+    {r:1,c:0,t:'dots'},{r:1,c:1,t:'lapis'},{r:1,c:2,t:'eyes'},{r:1,c:3,t:'rosette'},{r:1,c:4,t:'lapis'},{r:1,c:5,t:'eyes'},{r:1,c:6,t:'dots'},{r:1,c:7,t:'lapis'},
+    // Row 2 (P2 Home)
+    {r:2,c:0,t:'rosette'},{r:2,c:1,t:'eyes'},{r:2,c:2,t:'dots'},{r:2,c:3,t:'lapis'},null,null,{r:2,c:6,t:'rosette'},{r:2,c:7,t:'eyes'}
+];
+
+// Coordinate Paths (Index 0-13 are on board. 14 is Off)
+const PATH_P1 = [
+    {r:0,c:3},{r:0,c:2},{r:0,c:1},{r:0,c:0}, // Start
+    {r:1,c:0},{r:1,c:1},{r:1,c:2},{r:1,c:3},{r:1,c:4},{r:1,c:5},{r:1,c:6},{r:1,c:7}, // Combat
+    {r:0,c:7},{r:0,c:6} // End
+];
+const PATH_P2 = [
+    {r:2,c:3},{r:2,c:2},{r:2,c:1},{r:2,c:0},
+    {r:1,c:0},{r:1,c:1},{r:1,c:2},{r:1,c:3},{r:1,c:4},{r:1,c:5},{r:1,c:6},{r:1,c:7},
+    {r:2,c:7},{r:2,c:6}
+];
+
+// Logical Indices for Rosettes
+const ROSETTE_INDICES = [3, 7, 13]; 
+
+// --- 2. GAME STATE (MODEL) ---
+
+class GameState {
+    constructor() {
+        // 0 = P1 (Light), 1 = P2 (Dark)
+        this.turn = 0;
+        this.phase = 'roll'; // roll, anim, move, win
+        this.rollVal = 0;
+        
+        // Pieces: Array of integers representing position index. 
+        // -1 = Reserve, 0-13 = Board, 14 = Finished
+        this.p1Pieces = Array(7).fill(-1);
+        this.p2Pieces = Array(7).fill(-1);
+        
+        this.winner = null;
+        this.mode = 1; // 1=Solo, 2=Versus
+    }
+
+    rollDice() {
+        // 4 Binary Dice
+        const result = [0,0,0,0].map(() => Math.random() > 0.5 ? 1 : 0);
+        this.rollVal = result.reduce((a, b) => a + b, 0);
+        return { sum: this.rollVal, dice: result };
+    }
+
+    getValidMoves(playerIdx) {
+        const moves = []; // Indices of pieces that can move
+        const pieces = playerIdx === 0 ? this.p1Pieces : this.p2Pieces;
+        
+        pieces.forEach((pos, i) => {
+            if (pos === 14) return; // Already home
+            
+            const target = pos + this.rollVal;
+            
+            // 1. Exact Exit Rule
+            if (target === 14) {
+                moves.push(i);
+                return;
+            }
+            if (target > 14) return; // Overshot
+
+            // 2. Occupied by Self
+            if (pieces.includes(target)) return;
+
+            // 3. Rosette Safety (Combat Zone 4-11)
+            // Shared Rosette is at Index 7
+            if (target >= 4 && target <= 11) {
+                if (target === 7) {
+                    const enemyPieces = playerIdx === 0 ? this.p2Pieces : this.p1Pieces;
+                    if (enemyPieces.includes(7)) return; // Cannot land on enemy on rosette
+                }
+            }
+            
+            moves.push(i);
+        });
+        return moves;
+    }
+
+    applyMove(playerIdx, pieceIdx) {
+        const pieces = playerIdx === 0 ? this.p1Pieces : this.p2Pieces;
+        const enemyPieces = playerIdx === 0 ? this.p2Pieces : this.p1Pieces;
+        
+        const target = pieces[pieceIdx] + this.rollVal;
+        let captured = false;
+        let rosette = false;
+
+        // Capture Logic (Combat Zone only)
+        if (target >= 4 && target <= 11) {
+            const enemyIdx = enemyPieces.indexOf(target);
+            if (enemyIdx !== -1) {
+                enemyPieces[enemyIdx] = -1; // Send back to reserve
+                captured = true;
+            }
+        }
+
+        // Update Position
+        pieces[pieceIdx] = target;
+
+        // Check Rosette
+        if (ROSETTE_INDICES.includes(target) && target !== 14) {
+            rosette = true;
+        }
+
+        // Check Win
+        if (pieces.every(p => p === 14)) {
+            this.phase = 'win';
+            this.winner = playerIdx;
+        }
+
+        return { captured, rosette, target };
+    }
+}
+
+// --- 3. VIEW CONTROLLER (UI) ---
+
+const UI = {
+    board: document.getElementById('board'),
+    
+    init(map) {
+        this.board.innerHTML = '';
+        map.forEach(cell => {
+            const div = document.createElement('div');
+            if (!cell) {
+                div.style.visibility = 'hidden';
+            } else {
+                div.className = `relative w-full h-full flex items-center justify-center rounded-sm ${cell.t === 'lapis' || cell.t === 'rosette' ? 'tile-lapis' : 'tile-shell'}`;
+                div.id = `cell-${cell.r}-${cell.c}`;
+                
+                // Inner Pattern
+                if (cell.t !== 'lapis') {
+                    const pat = document.createElement('div');
+                    if (cell.t === 'rosette') pat.className = 'pattern-rosette';
+                    if (cell.t === 'eyes') { pat.className = 'pattern-eyes'; pat.innerHTML = '<div class="eye-dot"></div>'.repeat(4); }
+                    if (cell.t === 'dots') { pat.className = 'pattern-dots'; pat.innerHTML = '<div class="dot-sq"></div>'.repeat(12); }
+                    div.appendChild(pat);
+                }
+            }
+            this.board.appendChild(div);
+        });
+    },
+
+    renderTokens(game) {
+        // Clear existing tokens
+        document.querySelectorAll('.token').forEach(el => el.remove());
+
+        // Render P1
+        game.p1Pieces.forEach((pos, i) => this._spawnToken(0, pos, i, game));
+        // Render P2
+        game.p2Pieces.forEach((pos, i) => this._spawnToken(1, pos, i, game));
+    },
+
+    _spawnToken(pid, pos, idx, game) {
+        if (pos === -1 || pos === 14) return; // Handled in reserve/score
+        
+        const path = pid === 0 ? PATH_P1 : PATH_P2;
+        const coord = path[pos];
+        const cell = document.getElementById(`cell-${coord.r}-${coord.c}`);
+        
+        if (cell) {
+            const t = document.createElement('div');
+            t.className = `token ${pid === 0 ? 'token-p1' : 'token-p2'}`;
+            
+            // Interaction
+            if (game.turn === pid && game.phase === 'move') {
+                const validMoves = game.getValidMoves(pid);
+                if (validMoves.includes(idx)) {
+                    t.classList.add('valid-move');
+                    t.onclick = (e) => { e.stopPropagation(); App.handleMove(idx); };
+                } else {
+                    t.style.opacity = 0.5;
+                }
+            }
+            cell.appendChild(t);
+        }
+    },
+
+    renderReserve(game) {
+        ['p1', 'p2'].forEach((p, pid) => {
+            const el = document.getElementById(`${p}-reserve`);
+            el.innerHTML = '';
+            const pieces = pid === 0 ? game.p1Pieces : game.p2Pieces;
+            const count = pieces.filter(v => v === -1).length;
+            
+            for(let i=0; i<count; i++) {
+                const d = document.createElement('div');
+                d.className = `w-4 h-4 rounded-full border shadow ${pid===0?'bg-amber-500 border-amber-200':'bg-stone-600 border-stone-400'}`;
+                
+                // Clickable if valid entry
+                if (game.turn === pid && game.phase === 'move') {
+                    // Find specific index of a reserve piece
+                    const reserveIdx = pieces.indexOf(-1);
+                    const validMoves = game.getValidMoves(pid);
+                    
+                    if (validMoves.includes(reserveIdx)) {
+                        // Only make the first visual dot clickable to avoid confusion
+                        if (i === 0) {
+                            d.classList.add('valid-move', 'ring-2', 'ring-white');
+                            d.onclick = () => App.handleMove(reserveIdx);
+                        }
+                    } else {
+                        d.style.opacity = 0.3;
+                    }
+                }
+                el.appendChild(d);
+            }
+        });
+    },
+
+    updatePanels(game) {
+        const p1 = document.getElementById('p1-panel');
+        const p2 = document.getElementById('p2-panel');
+        const b1 = document.getElementById('p1-btn');
+        const b2 = document.getElementById('p2-btn');
+
+        if (game.turn === 0) {
+            p1.classList.replace('panel-inactive', 'panel-active');
+            p2.classList.replace('panel-active', 'panel-inactive');
+            b1.disabled = game.phase !== 'roll';
+            b1.textContent = game.phase === 'roll' ? "ROLL" : "MOVE";
+            b2.disabled = true;
+            b2.textContent = "WAIT";
+        } else {
+            p2.classList.replace('panel-inactive', 'panel-active');
+            p1.classList.replace('panel-active', 'panel-inactive');
+            b2.disabled = game.phase !== 'roll';
+            b2.textContent = game.phase === 'roll' ? "ROLL" : "MOVE";
+            if (game.mode === 1) b2.textContent = "CPU"; // AI Text
+            b1.disabled = true;
+            b1.textContent = "WAIT";
+        }
+
+        // Scores
+        document.getElementById('p1-score').textContent = game.p1Pieces.filter(p=>p===14).length;
+        document.getElementById('p2-score').textContent = game.p2Pieces.filter(p=>p===14).length;
+    },
+
+    showDice(pid, result) {
+        const container = document.getElementById(pid === 0 ? 'p1-dice-vis' : 'p2-dice-vis');
+        container.innerHTML = '';
+        result.dice.forEach(val => {
+            const d = document.createElement('div');
+            d.className = `w-8 h-8 bg-stone-200 transform rotate-45 flex items-center justify-center shadow-lg rolling border border-stone-400`;
+            if (val === 1) {
+                const pip = document.createElement('div');
+                pip.className = 'w-2 h-2 bg-black rounded-full';
+                d.appendChild(pip);
+            }
+            container.appendChild(d);
+        });
+
+        // HUD
+        const hud = document.getElementById('roll-hud');
+        const valEl = document.getElementById('roll-val');
+        valEl.textContent = result.sum;
+        hud.style.opacity = 1;
+        
+        if (result.sum === 0) {
+            valEl.classList.add('text-red-500');
+        } else {
+            valEl.classList.remove('text-red-500');
+        }
+    },
+
+    hideHUD() {
+        document.getElementById('roll-hud').style.opacity = 0;
+    },
+
+    toast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.style.opacity = 1;
+        t.style.bottom = "100px";
+        setTimeout(() => {
+            t.style.opacity = 0;
+            t.style.bottom = "32px";
+        }, 1500);
+    }
+};
+
+// --- 4. AUDIO ENGINE (SYNTH) ---
+const Audio = {
+    ctx: null,
+    init() {
+        if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    },
+    play(type) {
+        if (!this.ctx) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        const now = this.ctx.currentTime;
+        
+        if (type === 'roll') {
+            // Clack sound
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(200, now);
+            osc.frequency.exponentialRampToValueAtTime(50, now + 0.1);
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            osc.start(now);
+            osc.stop(now + 0.1);
+        } else if (type === 'move') {
+            // Soft slide
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(400, now);
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+            osc.start(now);
+            osc.stop(now + 0.2);
+        } else if (type === 'capture') {
+            // Thud
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(100, now);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.3);
+            osc.start(now);
+            osc.stop(now + 0.3);
+        } else if (type === 'rosette') {
+            // Chime
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.linearRampToValueAtTime(1200, now + 0.5);
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.linearRampToValueAtTime(0, now + 1);
+            osc.start(now);
+            osc.stop(now + 1);
+        }
+    }
+};
+
+// --- 5. APP CONTROLLER ---
+
+const App = {
+    game: new GameState(),
+    
+    start(mode) {
+        this.game.mode = mode;
+        document.getElementById('screen-start').style.opacity = 0;
+        setTimeout(() => document.getElementById('screen-start').remove(), 500);
+        
+        if(mode === 1) document.getElementById('p2-name').textContent = "CPU";
+        
+        UI.init(GRID_LAYOUT);
+        this.refresh();
+        Audio.init();
+        
+        // Bind Main Buttons
+        document.getElementById('p1-btn').onclick = () => this.humanRoll();
+        document.getElementById('p2-btn').onclick = () => { if(this.game.mode === 2) this.humanRoll(); };
+    },
+
+    humanRoll() {
+        if (this.game.phase !== 'roll') return;
+        this.performRoll();
+    },
+
+    performRoll() {
+        this.game.phase = 'anim';
+        const result = this.game.rollDice();
+        
+        // Visuals
+        UI.showDice(this.game.turn, result);
+        Audio.play('roll');
+        
+        // Logic delay
+        setTimeout(() => {
+            if (result.sum === 0) {
+                UI.toast("ROLLED ZERO");
+                setTimeout(() => this.passTurn(), 1000);
+            } else {
+                const moves = this.game.getValidMoves(this.game.turn);
+                if (moves.length === 0) {
+                    UI.toast("NO MOVES");
+                    setTimeout(() => this.passTurn(), 1500);
+                } else {
+                    this.game.phase = 'move';
+                    this.refresh();
+                    
+                    // CPU Trigger
+                    if (this.game.mode === 1 && this.game.turn === 1) {
+                        this.cpuMove(moves);
+                    }
+                }
+            }
+        }, 800);
+    },
+
+    handleMove(pieceIdx) {
+        if (this.game.phase !== 'move') return;
+        
+        const res = this.game.applyMove(this.game.turn, pieceIdx);
+        
+        // SFX
+        if (res.captured) Audio.play('capture');
+        else if (res.rosette) Audio.play('rosette');
+        else Audio.play('move');
+
+        if (this.game.phase === 'win') {
+            this.refresh();
+            setTimeout(() => alert((this.game.winner===0?"LIGHT":"DARK") + " WINS!"), 100);
+            return;
+        }
+
+        if (res.rosette) {
+            UI.toast("ROSETTE! ROLL AGAIN");
+            UI.hideHUD();
+            this.game.phase = 'roll';
+            this.game.rollVal = 0;
+            this.refresh();
+            
+            // CPU Rosette Followup
+            if (this.game.mode === 1 && this.game.turn === 1) {
+                setTimeout(() => this.performRoll(), 1000);
+            }
+        } else {
+            this.passTurn();
+        }
+    },
+
+    passTurn() {
+        this.game.turn = 1 - this.game.turn;
+        this.game.phase = 'roll';
+        this.game.rollVal = 0;
+        UI.hideHUD();
+        this.refresh();
+
+        // CPU Turn Start
+        if (this.game.mode === 1 && this.game.turn === 1) {
+            setTimeout(() => this.performRoll(), 1000);
+        }
+    },
+
+    cpuMove(moves) {
+        // Simple AI: Prioritize Rosettes > Captures > Progress
+        setTimeout(() => {
+            // Evaluate all moves
+            let bestMove = moves[0];
+            let bestScore = -999;
+
+            moves.forEach(idx => {
+                const currentPos = this.game.p2Pieces[idx];
+                const target = currentPos + this.game.rollVal;
+                let score = target; // Base progress
+
+                if (ROSETTE_INDICES.includes(target)) score += 50; // Rosette is huge
+                if (target === 14) score += 20; // Scoring is good
+                
+                // Capture Check
+                if (target >= 4 && target <= 11 && this.game.p1Pieces.includes(target)) {
+                    score += 30;
+                }
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = idx;
+                }
+            });
+
+            this.handleMove(bestMove);
+        }, 1500);
+    },
+
+    refresh() {
+        UI.updatePanels(this.game);
+        UI.renderReserve(this.game);
+        UI.renderTokens(this.game);
+    }
+};
+
+// PWA Install Hook (Optional)
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Logic to show install button would go here
+});
+
+</script>
+</body>
+</html>
